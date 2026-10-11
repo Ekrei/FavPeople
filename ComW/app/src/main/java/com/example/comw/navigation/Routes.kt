@@ -7,4 +7,6 @@ sealed class Routes(val route: String) {
         const val ARG_ID = "id"
         fun create(id: Long): String = "people_detail/$id"
     }
+
+    data object History : Routes("history")
 }

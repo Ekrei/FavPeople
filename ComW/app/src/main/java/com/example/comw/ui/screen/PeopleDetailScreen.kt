@@ -19,11 +19,10 @@ fun PeopleDetailScreen(
     onBack: () -> Unit,
     viewModel: PeopleDetailViewModel = hiltViewModel()
 ) {
+    // Загрузка запускается в init ViewModel (id берётся из SavedStateHandle),
+    // поэтому при повороте экрана повторного запроса нет.
     val state by viewModel.uiState.collectAsState()
-
-    LaunchedEffect(itemId) {
-        viewModel.load(itemId)
-    }
+    val isFav by viewModel.isFavorite.collectAsState()
 
     val scrollState = rememberScrollState()
 
@@ -41,12 +40,15 @@ fun PeopleDetailScreen(
 
         when (val s = state) {
             UiState.Loading -> {
-                Text("Loading...")
+                CircularProgressIndicator()
+            }
+            UiState.Empty -> {
+                Text("Нет данных")
             }
             is UiState.Error -> {
                 Text(s.message)
                 Spacer(modifier = Modifier.height(8.dp))
-                Button(onClick = { viewModel.load(itemId) }) {
+                Button(onClick = { viewModel.load() }) {
                     Text("Retry")
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -84,14 +86,8 @@ fun PeopleDetailScreen(
                         Text("Gender: ${d.gender ?: "—"}")
                         Text("URL: ${d.url ?: "—"}")
                         Spacer(modifier = Modifier.height(8.dp))
-                        val isFav = viewModel.isFavorite(d.id)
-                        Button(
-                            onClick = {
-                                if (isFav) viewModel.removeFromFavorites(d.id)
-                                else viewModel.addToFavorites(d)
-                            }
-                        ) {
-                            Text(if (isFav) "Unfavorites" else "Favorite")
+                        Button(onClick = { viewModel.toggleFavorite() }) {
+                            Text(if (isFav) "Убрать из избранного" else "В избранное")
                         }
                     }
                 }

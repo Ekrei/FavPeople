@@ -21,7 +21,8 @@ fun PersonItemCard(
     item: TvmPerson,
     isFavorite: Boolean,
     onFavoriteClick: () -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    showFavoriteButton: Boolean = true
 ) {
     Card(
         modifier = Modifier
@@ -55,8 +56,10 @@ fun PersonItemCard(
                 item.birthday?.let { Text(text = "Born: $it", style = MaterialTheme.typography.bodySmall) }
                 Text(text = "ID: ${item.id}", style = MaterialTheme.typography.bodySmall)
             }
-            IconButton(onClick = onFavoriteClick) {
-                Text(if (isFavorite) "★" else "☆", style = MaterialTheme.typography.titleMedium)
+            if (showFavoriteButton) {
+                IconButton(onClick = onFavoriteClick) {
+                    Text(if (isFavorite) "★" else "☆", style = MaterialTheme.typography.titleMedium)
+                }
             }
         }
     }

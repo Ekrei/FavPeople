@@ -10,6 +10,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.comw.navigation.Routes
+import com.example.comw.ui.screen.HistoryScreen
 import com.example.comw.ui.screen.PeopleDetailScreen
 import com.example.comw.ui.screen.PeopleListScreen
 
@@ -27,7 +28,15 @@ fun App() {
                 PeopleListScreen(
                     onOpenDetail = { id ->
                         navController.navigate(Routes.Detail.create(id))
-                    }
+                    },
+                    onOpenHistory = { navController.navigate(Routes.History.route) }
+                )
+            }
+
+            composable(Routes.History.route) {
+                HistoryScreen(
+                    onOpenDetail = { id -> navController.navigate(Routes.Detail.create(id)) },
+                    onBack = { navController.popBackStack() }
                 )
             }
 

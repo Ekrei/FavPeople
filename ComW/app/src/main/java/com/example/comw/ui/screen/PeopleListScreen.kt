@@ -7,8 +7,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.comw.ui.viewmodel.PeopleListViewModel
@@ -20,20 +22,26 @@ private const val VARIANT_CODE = "TVM-PEOPLE-MOD_E25_FAV_SORT"
 @Composable
 fun PeopleListScreen(
     onOpenDetail: (Long) -> Unit,
+    onOpenHistory: () -> Unit,
     viewModel: PeopleListViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
+    val favoriteIds = remember(favorites) { favorites.map { it.person.id }.toSet() }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(12.dp)
     ) {
-        Text(
-            text = "TVmaze People",
-            style = MaterialTheme.typography.headlineSmall
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "TVmaze People",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onOpenHistory) { Text("История") }
+        }
         Text(
             text = "VariantCode: $VARIANT_CODE",
             style = MaterialTheme.typography.bodySmall,
@@ -42,7 +50,7 @@ fun PeopleListScreen(
 
         if (favorites.isNotEmpty()) {
             Text(
-                text = "Favorites (sorted by adding time)",
+                text = "Избранное (по времени добавления)",
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.padding(vertical = 4.dp)
             )
@@ -50,7 +58,7 @@ fun PeopleListScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.heightIn(max = 220.dp)
             ) {
-                items(favorites, key = { it.person.id }) { entry ->
+                items(favorites, key = { "fav_${it.person.id}" }) { entry ->
                     PersonItemCard(
                         item = entry.person,
                         isFavorite = true,
@@ -68,7 +76,18 @@ fun PeopleListScreen(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(modifier = Modifier.testTag("loading"))
+                }
+            }
+            UiState.Empty -> {
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(text = "Список пуст")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = { viewModel.load() }) { Text("Обновить") }
                 }
             }
             is UiState.Error -> {
@@ -92,13 +111,8 @@ fun PeopleListScreen(
                     items(s.data, key = { it.id }) { item ->
                         PersonItemCard(
                             item = item,
-                            isFavorite = viewModel.isFavorite(item.id),
-                            onFavoriteClick = {
-                                if (viewModel.isFavorite(item.id))
-                                    viewModel.removeFavorite(item.id)
-                                else
-                                    viewModel.addFavorite(item)
-                            },
+                            isFavorite = item.id in favoriteIds,
+                            onFavoriteClick = { viewModel.toggleFavorite(item) },
                             onClick = { onOpenDetail(item.id) }
                         )
                     }
