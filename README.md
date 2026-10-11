@@ -1,53 +1,69 @@
-# FavPeople — ДЗ №4: Hilt + Room
+# FavPeople — ДЗ №5: тестирование
 
 **ФИО:** Алалин Алексей Юрьевич  
 **Группа:** ПИКД Б9123-09.03.03, 5 подгруппа  
-**VariantCode:** TVM-PEOPLE-MOD_E25_FAV_SORT
+**VariantCode:** TVM-PEOPLE-MOD_E25_FAV_SORT · API: TVmaze (`https://api.tvmaze.com`)
 
-## Какой API
-TVmaze API — `https://api.tvmaze.com`
+Проект из ДЗ 4 остался рабочим: экраны List / Detail / History, Navigation Compose, Retrofit, Room, Hilt,
+состояния Loading / Error + Retry / Empty / Content.
 
-| Экран | Endpoint | Зачем |
+## Как запустить тесты
+```
+cd ComW
+./gradlew testDebugUnitTest        # Windows: gradlew.bat testDebugUnitTest
+```
+или в Android Studio: правый клик по папке `app/src/test` → **Run 'Tests in ...'**.
+Все тесты (включая Room и Compose UI) идут в JVM через **Robolectric**, эмулятор не нужен.
+
+## Сколько сделано
+| Вид | Кол-во | Где |
 |---|---|---|
-| Список (List) | `GET /people?page=0` | первые 20 людей на главном экране |
-| Детали (Detail) | `GET /people/{id}` | детали человека по id |
+| Юнит-тесты | **15** | `app/src/test/.../unit` |
+| Интеграционные тесты | **10** | `app/src/test/.../integration` |
+| из них нетривиальных | 7 | отмечены ниже ★ |
+| из них на Flow | 3 | отмечены ниже 🌊 |
 
-## Что сделано в ДЗ 4
+## Юнит-тесты (15)
+**PeopleListViewModelTest** (8)
+- корректное начальное состояние — `Loading`;
+- успешная загрузка → `Content`;
+- ошибка сети → `Error` с понятным текстом;
+- ★ пустой ответ даёт именно `Empty`, а не `Content(emptyList())`;
+- на экран попадают только первые 20 элементов;
+- ★ `retry()` после ошибки действительно делает **второй** запрос (проверяется счётчик вызовов) и показывает данные;
+- 🌊 полная последовательность эмиссий: `Loading → Error → Loading → Content`, без лишних эмиссий;
+- 🌊★ повторная загрузка **отменяет** старый запрос: его результат не попадает в UI.
 
-### Hilt (внедрение зависимостей)
-- `ComWApp` помечен `@HiltAndroidApp`, `MainActivity` — `@AndroidEntryPoint`, ViewModel — `@HiltViewModel`.
-- Модули: `NetworkModule` (OkHttp, Retrofit, `TvmApi`), `DatabaseModule` (Room, DAO, `TimeProvider`),
-  `RepositoryModule` (`@Binds` интерфейс → реализация).
-- В UI и ViewModel ничего не создаётся вручную: ни Retrofit, ни база, ни репозитории.
+**PeopleDetailViewModelTest** (4)
+- ★ id берётся из `SavedStateHandle`, и запрашиваются детали именно этого id;
+- без id в `SavedStateHandle` ViewModel не создаётся (ошибка сразу, а не «тихий» баг);
+- успешный просмотр пишется в историю, а ошибка — нет;
+- `toggleFavorite()` добавляет и убирает из избранного.
 
-### Room — 2 таблицы, 2 сценария
-| Таблица | Сценарий | Что хранится |
-|---|---|---|
-| `favorites` | **Favourites** — избранное переживает перезапуск | id, имя, страна, дата рождения, пол, фото, url, `addedAt` |
-| `view_history` | **History** — история просмотров деталей | те же поля + `viewedAt` |
+**MappersTest** (3) — преобразование DTO → модель: запись без id отбрасывается, пустое имя → заглушка, фолбэк картинки.
 
-- Избранное сортируется по времени добавления (`ORDER BY addedAt DESC`) — модификатор варианта **MOD_E25_FAV_SORT**.
-- Повторное добавление в избранное не создаёт дубль (`personId` — первичный ключ, `OnConflictStrategy.IGNORE`).
-- Повторный просмотр того же человека обновляет время в истории, а не добавляет вторую строку (`REPLACE`).
-- DAO отдают `Flow`, поэтому звёздочки, блок «Избранное» и экран истории обновляются сами.
+## Интеграционные тесты (10)
+**Data-слой: Repository + Room** (`FavoritesRepositoryRoomTest`, `HistoryRepositoryRoomTest`)
+- ★ повторное добавление в избранное не создаёт дубль и не меняет время добавления;
+- избранное отсортировано по времени добавления (модификатор варианта);
+- 🌊 Room-Flow сам присылает новые списки: `[] → [A] → [B, A] → [A]`;
+- ★ данные читаются повторно после «перезапуска» (база закрыта и открыта заново);
+- повторный просмотр поднимает человека наверх истории без дубля; `clear()` очищает историю.
 
-### Приложение из ДЗ 3 осталось рабочим
-- Экраны: список `people_list`, детали `people_detail/{id}`, новый экран истории `history` (Navigation Compose).
-- Retrofit + coroutines + `viewModelScope`.
-- Состояния UI: `Loading` / `Error` + Retry / `Empty` / `Content` (Success).
+**Data-слой: Repository + Fake API** (`TvmRepositoryFakeApiTest`)
+- репозиторий запрашивает нужную страницу и отбрасывает записи без id;
+- ошибка сети пробрасывается наверх.
 
-## Как проверить («сделал → перезапустил → осталось»)
-1. Запустить приложение, нажать ☆ у 2–3 человек → они появляются сверху в блоке «Избранное» (последний добавленный — первым).
-2. Открыть детали 2–3 человек, вернуться и нажать «История» → там открытые люди со временем просмотра.
-3. Полностью закрыть приложение (смахнуть из недавних) и запустить снова.
-4. Избранное и история на месте — данные читаются из Room.
-5. Проверить таблицы можно в Android Studio: **App Inspection → Database Inspector → favpeople.db**.
+**UI** (`PeopleListScreenTest`, Compose + настоящая ViewModel + фейковый репозиторий)
+- ошибка → нажатие **Retry** → на экране список;
+- ★ клик по элементу открывает детали именно нужного id.
 
-## Скриншоты
-| Loading | Error + Retry | List | Detail |
-|---|---|---|---|
-| ![](LoadingScreen.png) | ![](RetryScreen.png) | ![](Last20.png) | ![](DetailScreen.png) |
+## Какие последовательности эмиссий Flow проверяются
+1. `uiState` списка: `Loading → Error → Loading → Content`, затем `expectNoEvents()` — дублей нет.
+2. Отмена устаревшего запроса: первый запрос «висит», второй отвечает → в UI только результат второго;
+   когда первый наконец отвечает — новых эмиссий нет.
+3. `observeFavorites()` из Room: `[] → [Alice] → [Bob, Alice] → [Alice]`.
 
-| Избранное | Состояние Room (Database Inspector) |
-|---|---|
-| ![](Favs.png) | ![](room_state.png) |
+## Детерминированность
+- `Dispatchers.Main` подменяется на `StandardTestDispatcher` (`MainDispatcherRule`), время виртуальное (`runTest`).
+- Сеть заменена фейками, время — `FakeTimeProvider`, база — in-memory Room.

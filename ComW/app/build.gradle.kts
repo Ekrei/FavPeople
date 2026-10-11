@@ -42,6 +42,13 @@ android {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        unitTests {
+            // нужно Robolectric'у: ресурсы и манифест доступны в JVM-тестах
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -72,6 +79,15 @@ dependencies {
     kapt("androidx.room:room-compiler:2.6.1")
 
     testImplementation(libs.junit)
+
+    // ДЗ 5: тесты
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1") // runTest, TestDispatcher
+    testImplementation("app.cash.turbine:turbine:1.1.0")                      // проверка эмиссий Flow
+    testImplementation("org.robolectric:robolectric:4.14.1")                  // Android-окружение в JVM
+    testImplementation("androidx.test:core-ktx:1.6.1")
+    testImplementation("androidx.test.ext:junit-ktx:1.2.1")
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)                  // Compose UI-тесты
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
