@@ -7,18 +7,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.comw.ui.viewmodel.GenderFilter
 import com.example.comw.ui.viewmodel.PeopleListViewModel
 import com.example.comw.ui.viewmodel.UiState
 import com.example.comw.ui.widget.PersonItemCard
 
 private const val VARIANT_CODE = "TVM-PEOPLE-MOD_E25_FAV_SORT"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PeopleListScreen(
     onOpenDetail: (Long) -> Unit,
@@ -26,8 +27,7 @@ fun PeopleListScreen(
     viewModel: PeopleListViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
-    val favorites by viewModel.favorites.collectAsState()
-    val favoriteIds = remember(favorites) { favorites.map { it.person.id }.toSet() }
+    val query by viewModel.query.collectAsState()
 
     Column(
         modifier = Modifier
@@ -48,7 +48,35 @@ fun PeopleListScreen(
             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
         )
 
-        if (favorites.isNotEmpty()) {
+        // Источник 1: строка поиска
+        OutlinedTextField(
+            value = query,
+            onValueChange = viewModel::onQueryChange,
+            label = { Text("Поиск по имени") },
+            singleLine = true,
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    TextButton(onClick = { viewModel.onQueryChange("") }) { Text("✕") }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("search")
+        )
+
+        // Источник 2: фильтр
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            GenderFilter.entries.forEach { option ->
+                FilterChip(
+                    selected = state.filter == option,
+                    onClick = { viewModel.onFilterChange(option) },
+                    label = { Text(option.label) }
+                )
+            }
+        }
+
+        // Источник 3: избранное из Room (обновляется само)
+        if (state.favorites.isNotEmpty()) {
             Text(
                 text = "Избранное (по времени добавления)",
                 style = MaterialTheme.typography.titleSmall,
@@ -56,9 +84,9 @@ fun PeopleListScreen(
             )
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.heightIn(max = 220.dp)
+                modifier = Modifier.heightIn(max = 180.dp)
             ) {
-                items(favorites, key = { "fav_${it.person.id}" }) { entry ->
+                items(state.favorites, key = { "fav_${it.person.id}" }) { entry ->
                     PersonItemCard(
                         item = entry.person,
                         isFavorite = true,
@@ -70,7 +98,7 @@ fun PeopleListScreen(
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         }
 
-        when (val s = state) {
+        when (val s = state.content) {
             UiState.Loading -> {
                 Box(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -85,9 +113,13 @@ fun PeopleListScreen(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(text = "Список пуст")
+                    Text(
+                        text = if (state.query.isBlank()) "Список пуст"
+                        else "По запросу «${state.query.trim()}» никого не найдено"
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = { viewModel.load() }) { Text("Обновить") }
+                    // Источник 4: поток действий пользователя
+                    Button(onClick = { viewModel.refresh() }) { Text("Обновить") }
                 }
             }
             is UiState.Error -> {
@@ -98,7 +130,7 @@ fun PeopleListScreen(
                 ) {
                     Text(text = s.message)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = { viewModel.load() }) {
+                    Button(onClick = { viewModel.refresh() }) {
                         Text("Retry")
                     }
                 }
@@ -108,12 +140,12 @@ fun PeopleListScreen(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(s.data, key = { it.id }) { item ->
+                    items(s.data, key = { it.person.id }) { row ->
                         PersonItemCard(
-                            item = item,
-                            isFavorite = item.id in favoriteIds,
-                            onFavoriteClick = { viewModel.toggleFavorite(item) },
-                            onClick = { onOpenDetail(item.id) }
+                            item = row.person,
+                            isFavorite = row.isFavorite,
+                            onFavoriteClick = { viewModel.toggleFavorite(row.person) },
+                            onClick = { onOpenDetail(row.person.id) }
                         )
                     }
                 }

@@ -5,12 +5,12 @@ import com.example.comw.model.TvmPersonDetail
 
 /** Готовые тестовые данные, чтобы не повторять их в каждом тесте. */
 object TestData {
-    fun person(id: Long, name: String = "Person $id") = TvmPerson(
+    fun person(id: Long, name: String = "Person $id", gender: String = "Male") = TvmPerson(
         id = id,
         name = name,
         country = "Russia",
         birthday = "1990-01-01",
-        gender = "Male",
+        gender = gender,
         imageUrl = null,
         url = "https://www.tvmaze.com/people/$id"
     )
@@ -27,7 +27,7 @@ object TestData {
         updated = 0L
     )
 
-    val alice = person(1, "Alice")
+    val alice = person(1, "Alice", gender = "Female")
     val bob = person(2, "Bob")
-    val carol = person(3, "Carol")
+    val carol = person(3, "Carol", gender = "Female")
 }

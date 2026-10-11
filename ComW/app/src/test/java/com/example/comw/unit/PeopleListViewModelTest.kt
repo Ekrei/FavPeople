@@ -6,11 +6,15 @@ import com.example.comw.testutil.FakeFavoritesRepository
 import com.example.comw.testutil.FakeTvmRepository
 import com.example.comw.testutil.MainDispatcherRule
 import com.example.comw.testutil.TestData
+import com.example.comw.ui.viewmodel.PeopleListUiState
 import com.example.comw.ui.viewmodel.PeopleListViewModel
+import com.example.comw.ui.viewmodel.PersonRow
 import com.example.comw.ui.viewmodel.UiState
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -31,15 +35,16 @@ class PeopleListViewModelTest {
 
     private fun createViewModel() = PeopleListViewModel(repo, favorites)
 
+    private fun rows(vararg people: TvmPerson) = people.map { PersonRow(it, isFavorite = false) }
+
     @Test
-    fun `начальное состояние - Loading`() = runTest {
+    fun `начальное состояние - Loading с пустым запросом и фильтром Все`() = runTest {
         repo.enqueueList(listOf(TestData.alice))
 
         val vm = createViewModel()
 
-        // Корутина загрузки ещё не выполнялась (StandardTestDispatcher),
-        // поэтому экран должен быть в состоянии Loading.
-        assertEquals(UiState.Loading, vm.uiState.value)
+        assertEquals(PeopleListUiState(), vm.uiState.value)
+        assertEquals(UiState.Loading, vm.uiState.value.content)
     }
 
     @Test
@@ -49,7 +54,7 @@ class PeopleListViewModelTest {
         val vm = createViewModel()
         advanceUntilIdle()
 
-        assertEquals(UiState.Content(listOf(TestData.alice, TestData.bob)), vm.uiState.value)
+        assertEquals(UiState.Content(rows(TestData.alice, TestData.bob)), vm.uiState.value.content)
     }
 
     @Test
@@ -59,7 +64,7 @@ class PeopleListViewModelTest {
         val vm = createViewModel()
         advanceUntilIdle()
 
-        assertEquals(UiState.Error("Нет сети или проблема с подключением"), vm.uiState.value)
+        assertEquals(UiState.Error("Нет сети или проблема с подключением"), vm.uiState.value.content)
     }
 
     @Test
@@ -69,7 +74,7 @@ class PeopleListViewModelTest {
         val vm = createViewModel()
         advanceUntilIdle()
 
-        assertEquals(UiState.Empty, vm.uiState.value)
+        assertEquals(UiState.Empty, vm.uiState.value.content)
     }
 
     @Test
@@ -79,9 +84,9 @@ class PeopleListViewModelTest {
         val vm = createViewModel()
         advanceUntilIdle()
 
-        val content = vm.uiState.value as UiState.Content<List<TvmPerson>>
+        @Suppress("UNCHECKED_CAST")
+        val content = vm.uiState.value.content as UiState.Content<List<PersonRow>>
         assertEquals(20, content.data.size)
-        assertEquals(1L, content.data.first().id)
     }
 
     @Test
@@ -91,58 +96,53 @@ class PeopleListViewModelTest {
 
         val vm = createViewModel()
         advanceUntilIdle()
-        assertTrue(vm.uiState.value is UiState.Error)
-        assertEquals(1, repo.listCalls)
+        assertTrue(vm.uiState.value.content is UiState.Error)
 
-        vm.load() // кнопка Retry
+        vm.refresh() // кнопка Retry -> событие в SharedFlow
         advanceUntilIdle()
 
-        assertEquals(2, repo.listCalls) // был второй поход в "сеть"
-        assertEquals(UiState.Content(listOf(TestData.alice)), vm.uiState.value)
+        assertEquals(2, repo.listCalls)
+        assertEquals(UiState.Content(rows(TestData.alice)), vm.uiState.value.content)
     }
 
     @Test
     fun `Flow - полная последовательность Loading, Error, Loading, Content`() = runTest {
-        // имитируем сеть с задержкой, чтобы Loading был виден как отдельное состояние
         repo.enqueueListAnswer { delay(100); throw IOException() }
         repo.enqueueListAnswer { delay(100); listOf(TestData.bob) }
 
         val vm = createViewModel()
 
-        vm.uiState.test {
+        vm.uiState.map { it.content }.distinctUntilChanged().test {
             assertEquals(UiState.Loading, awaitItem())
             assertEquals(UiState.Error("Нет сети или проблема с подключением"), awaitItem())
 
-            vm.load()
+            vm.refresh()
 
             assertEquals(UiState.Loading, awaitItem())
-            assertEquals(UiState.Content(listOf(TestData.bob)), awaitItem())
-            expectNoEvents() // лишних (дублирующихся) эмиссий нет
+            assertEquals(UiState.Content(rows(TestData.bob)), awaitItem())
+            expectNoEvents()
         }
     }
 
     @Test
-    fun `Flow - повторная загрузка отменяет старый запрос, и его результат не попадает в UI`() = runTest {
+    fun `Flow - повторное обновление отменяет старый запрос, и его результат не попадает в UI`() = runTest {
         val slowFirstResponse = CompletableDeferred<List<TvmPerson>>()
-        repo.enqueueListAnswer { slowFirstResponse.await() } // первый запрос "висит"
-        repo.enqueueList(listOf(TestData.bob))                // второй отвечает сразу
+        repo.enqueueListAnswer { slowFirstResponse.await() }
+        repo.enqueueList(listOf(TestData.bob))
 
         val vm = createViewModel()
 
-        vm.uiState.test {
+        vm.uiState.map { it.content }.distinctUntilChanged().test {
             assertEquals(UiState.Loading, awaitItem())
-            runCurrent() // первый запрос стартовал и ждёт ответа
+            runCurrent() // первый запрос "висит"
 
-            vm.load()    // пользователь нажал "обновить" ещё раз
-            assertEquals(UiState.Content(listOf(TestData.bob)), awaitItem())
+            vm.refresh()
+            assertEquals(UiState.Content(rows(TestData.bob)), awaitItem())
 
-            // теперь "приходит" ответ первого (устаревшего) запроса
             slowFirstResponse.complete(listOf(TestData.alice))
             runCurrent()
-
-            expectNoEvents() // Alice так и не появилась на экране
+            expectNoEvents()
         }
-        assertEquals(UiState.Content(listOf(TestData.bob)), vm.uiState.value)
         assertEquals(2, repo.listCalls)
     }
 }

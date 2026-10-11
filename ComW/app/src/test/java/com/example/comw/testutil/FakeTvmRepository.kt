@@ -18,6 +18,10 @@ class FakeTvmRepository : TvmRepository {
         private set
     val requestedDetailIds = mutableListOf<Long>()
 
+    /** Все строки, с которыми вызывался поиск, — по ним проверяем debounce и distinctUntilChanged. */
+    val searchQueries = mutableListOf<String>()
+    var searchHandler: suspend (String) -> List<TvmPerson> = { emptyList() }
+
     fun enqueueList(items: List<TvmPerson>) = listAnswers.addLast { items }
     fun enqueueListError(error: Exception) = listAnswers.addLast { throw error }
     fun enqueueListAnswer(answer: suspend () -> List<TvmPerson>) = listAnswers.addLast(answer)
@@ -37,5 +41,8 @@ class FakeTvmRepository : TvmRepository {
         return answer(id)
     }
 
-    override suspend fun searchPeople(query: String): List<TvmPerson> = emptyList()
+    override suspend fun searchPeople(query: String): List<TvmPerson> {
+        searchQueries += query
+        return searchHandler(query)
+    }
 }
