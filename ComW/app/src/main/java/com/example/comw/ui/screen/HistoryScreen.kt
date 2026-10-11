@@ -15,51 +15,72 @@ import com.example.comw.ui.util.formatDateTime
 import com.example.comw.ui.viewmodel.HistoryViewModel
 import com.example.comw.ui.viewmodel.UiState
 import com.example.comw.ui.widget.PersonItemCard
+import com.example.comw.ui.widget.ScreenHeader
+import com.example.comw.ui.widget.SectionTitle
 
-/** Экран истории просмотров (данные из Room, работает и без интернета). */
+/** История (recent): недавние поисковые запросы + просмотренные люди. Всё из Room. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
     onOpenDetail: (Long) -> Unit,
+    onSearchClick: (String) -> Unit,
     onBack: () -> Unit,
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val searches by viewModel.recentSearches.collectAsState()
 
-    Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("← Назад") }
-            Text(
-                text = "История просмотров",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.weight(1f)
-            )
-            if (state is UiState.Content) {
-                TextButton(onClick = { viewModel.clear() }) { Text("Очистить") }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item { ScreenHeader(title = "История", onBack = onBack) }
+
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SectionTitle("Недавние запросы", modifier = Modifier.weight(1f))
+                if (searches.isNotEmpty()) {
+                    TextButton(onClick = { viewModel.clearSearches() }) { Text("Очистить") }
+                }
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
-
-        when (val s = state) {
-            UiState.Loading -> CircularProgressIndicator()
-            UiState.Empty -> Text("Вы ещё никого не открывали")
-            is UiState.Error -> Text(s.message)
-            is UiState.Content -> {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(s.data, key = { it.person.id }) { entry ->
-                        Column {
-                            Text(
-                                text = "Просмотрено: ${entry.viewedAtMillis.formatDateTime()}",
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                            PersonItemCard(
-                                item = entry.person,
-                                isFavorite = false,
-                                showFavoriteButton = false,
-                                onFavoriteClick = {},
-                                onClick = { onOpenDetail(entry.person.id) }
-                            )
-                        }
+        item {
+            if (searches.isEmpty()) {
+                Text("Вы ещё ничего не искали", style = MaterialTheme.typography.bodySmall)
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    searches.forEach { q ->
+                        AssistChip(onClick = { onSearchClick(q) }, label = { Text("🔍 $q") })
                     }
+                }
+            }
+        }
+
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SectionTitle("Просмотренные", modifier = Modifier.weight(1f))
+                if (state is UiState.Content) {
+                    TextButton(onClick = { viewModel.clear() }) { Text("Очистить") }
+                }
+            }
+        }
+        when (val s = state) {
+            UiState.Loading -> item { CircularProgressIndicator() }
+            UiState.Empty -> item { Text("Вы ещё никого не открывали") }
+            is UiState.Error -> item { Text(s.message) }
+            is UiState.Content -> items(s.data, key = { it.person.id }) { entry ->
+                Column {
+                    Text(
+                        text = "Просмотрено: ${entry.viewedAtMillis.formatDateTime()}",
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                    PersonItemCard(
+                        item = entry.person,
+                        isFavorite = false,
+                        showFavoriteButton = false,
+                        onFavoriteClick = {},
+                        onClick = { onOpenDetail(entry.person.id) }
+                    )
                 }
             }
         }

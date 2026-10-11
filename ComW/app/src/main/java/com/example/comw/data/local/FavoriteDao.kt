@@ -32,4 +32,7 @@ interface FavoriteDao {
 
     @Query("SELECT COUNT(*) FROM favorites")
     suspend fun count(): Int
+
+    @Query("SELECT personId FROM favorites")
+    suspend fun allPersonIds(): List<Long>
 }

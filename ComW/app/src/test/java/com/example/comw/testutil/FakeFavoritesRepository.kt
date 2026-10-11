@@ -39,5 +39,7 @@ class FakeFavoritesRepository(
             add(person)
         }
 
+    override suspend fun favoriteIds(): List<Long> = ids()
+
     fun ids(): List<Long> = state.value.map { it.person.id }
 }

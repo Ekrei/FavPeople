@@ -1,20 +1,22 @@
 package com.example.comw.ui.screen
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.comw.ui.viewmodel.GenderFilter
+import com.example.comw.domain.logic.ListFilter
+import com.example.comw.ui.util.formatDateTime
 import com.example.comw.ui.viewmodel.PeopleListViewModel
 import com.example.comw.ui.viewmodel.UiState
+import com.example.comw.ui.widget.OfflineBanner
 import com.example.comw.ui.widget.PersonItemCard
 
 private const val VARIANT_CODE = "TVM-PEOPLE-MOD_E25_FAV_SORT"
@@ -24,31 +26,40 @@ private const val VARIANT_CODE = "TVM-PEOPLE-MOD_E25_FAV_SORT"
 fun PeopleListScreen(
     onOpenDetail: (Long) -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenMy: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+    pendingQuery: String? = null,
+    onPendingQueryConsumed: () -> Unit = {},
     viewModel: PeopleListViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val query by viewModel.query.collectAsState()
+
+    // Запрос, выбранный на экране истории
+    LaunchedEffect(pendingQuery) {
+        if (pendingQuery != null) {
+            viewModel.onQueryChange(pendingQuery)
+            onPendingQueryConsumed()
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(12.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "TVmaze People",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.weight(1f)
-            )
+        Text(text = "TVmaze People", style = MaterialTheme.typography.headlineSmall)
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+            TextButton(onClick = onOpenMy) { Text("Моё") }
             TextButton(onClick = onOpenHistory) { Text("История") }
+            TextButton(onClick = onOpenSettings) { Text("Настройки") }
         }
         Text(
             text = "VariantCode: $VARIANT_CODE",
             style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+            modifier = Modifier.padding(bottom = 4.dp)
         )
 
-        // Источник 1: строка поиска
         OutlinedTextField(
             value = query,
             onValueChange = viewModel::onQueryChange,
@@ -64,9 +75,27 @@ fun PeopleListScreen(
                 .testTag("search")
         )
 
-        // Источник 2: фильтр
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GenderFilter.entries.forEach { option ->
+        // недавние запросы (Room)
+        if (query.isEmpty() && state.recentSearches.isNotEmpty()) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState())
+            ) {
+                state.recentSearches.forEach { recent ->
+                    AssistChip(
+                        onClick = { viewModel.onQueryChange(recent) },
+                        label = { Text("🕘 $recent") }
+                    )
+                }
+            }
+        }
+
+        // фильтры (часть зависит от личных данных)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
+            ListFilter.entries.forEach { option ->
                 FilterChip(
                     selected = state.filter == option,
                     onClick = { viewModel.onFilterChange(option) },
@@ -75,8 +104,25 @@ fun PeopleListScreen(
             }
         }
 
-        // Источник 3: избранное из Room (обновляется само)
-        if (state.favorites.isNotEmpty()) {
+        state.notice?.let { OfflineBanner(text = it, onRetry = { viewModel.refresh() }) }
+
+        if (state.query.isBlank()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = state.lastUpdatedAt?.let { "Обновлено: ${it.formatDateTime()}" }
+                        ?: "Ещё не обновлялось",
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                if (state.isRefreshing) {
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                } else {
+                    TextButton(onClick = { viewModel.refresh() }) { Text("Обновить") }
+                }
+            }
+        }
+
+        if (state.favorites.isNotEmpty() && state.filter != ListFilter.FAVORITES && state.query.isBlank()) {
             Text(
                 text = "Избранное (по времени добавления)",
                 style = MaterialTheme.typography.titleSmall,
@@ -84,7 +130,7 @@ fun PeopleListScreen(
             )
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.heightIn(max = 180.dp)
+                modifier = Modifier.heightIn(max = 160.dp)
             ) {
                 items(state.favorites, key = { "fav_${it.person.id}" }) { entry ->
                     PersonItemCard(
@@ -114,11 +160,13 @@ fun PeopleListScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = if (state.query.isBlank()) "Список пуст"
-                        else "По запросу «${state.query.trim()}» никого не найдено"
+                        text = when {
+                            state.query.isNotBlank() -> "По запросу «${state.query.trim()}» никого не найдено"
+                            state.filter != ListFilter.ALL -> "Под фильтр «${state.filter.label}» никто не подходит"
+                            else -> "Список пуст"
+                        }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    // Источник 4: поток действий пользователя
                     Button(onClick = { viewModel.refresh() }) { Text("Обновить") }
                 }
             }
@@ -129,10 +177,12 @@ fun PeopleListScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(text = s.message)
+                    Text(
+                        text = "Сохранённых данных пока нет",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = { viewModel.refresh() }) {
-                        Text("Retry")
-                    }
+                    Button(onClick = { viewModel.refresh() }) { Text("Retry") }
                 }
             }
             is UiState.Content -> {
@@ -144,6 +194,8 @@ fun PeopleListScreen(
                         PersonItemCard(
                             item = row.person,
                             isFavorite = row.isFavorite,
+                            status = row.status,
+                            hasNote = row.hasNote,
                             onFavoriteClick = { viewModel.toggleFavorite(row.person) },
                             onClick = { onOpenDetail(row.person.id) }
                         )

@@ -16,4 +16,7 @@ interface FavoritesRepository {
 
     /** Переключить состояние. @return новое состояние (true = теперь в избранном). */
     suspend fun toggle(person: TvmPerson): Boolean
+
+    /** id всех избранных — для фоновой предзагрузки их деталей. */
+    suspend fun favoriteIds(): List<Long>
 }

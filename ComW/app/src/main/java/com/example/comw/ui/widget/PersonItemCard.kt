@@ -14,6 +14,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.comw.model.PersonalStatus
 import com.example.comw.model.TvmPerson
 
 @Composable
@@ -22,7 +23,9 @@ fun PersonItemCard(
     isFavorite: Boolean,
     onFavoriteClick: () -> Unit,
     onClick: () -> Unit,
-    showFavoriteButton: Boolean = true
+    showFavoriteButton: Boolean = true,
+    status: PersonalStatus = PersonalStatus.NONE,
+    hasNote: Boolean = false
 ) {
     Card(
         modifier = Modifier
@@ -51,6 +54,14 @@ fun PersonItemCard(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
+                // личные отметки пользователя
+                val marks = listOfNotNull(
+                    status.badge.takeIf { it.isNotEmpty() }?.let { "$it ${status.label}" },
+                    if (hasNote) "📝 есть заметка" else null
+                )
+                if (marks.isNotEmpty()) {
+                    Text(text = marks.joinToString("  ·  "), style = MaterialTheme.typography.labelMedium)
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 item.country?.let { Text(text = it, style = MaterialTheme.typography.bodySmall) }
                 item.birthday?.let { Text(text = "Born: $it", style = MaterialTheme.typography.bodySmall) }

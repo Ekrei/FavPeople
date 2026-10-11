@@ -42,4 +42,6 @@ class FavoritesRepositoryImpl @Inject constructor(
             add(person)
             true
         }
+
+    override suspend fun favoriteIds(): List<Long> = dao.allPersonIds()
 }
