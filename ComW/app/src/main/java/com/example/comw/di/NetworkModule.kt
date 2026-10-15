@@ -10,6 +10,7 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 @Module
@@ -33,6 +34,12 @@ object NetworkModule {
     ): OkHttpClient {
         return OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
+            // Без таймаутов запрос при плохой сети (особенно DNS в эмуляторе) может висеть бесконечно,
+            // и пользователь видит вечный индикатор загрузки. С ними через ~20 с придёт ошибка
+            // и экран покажет сообщение + кнопку "Повторить".
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
             .build()
     }
 
