@@ -86,3 +86,19 @@ ui (Compose screens) → ViewModel (StateFlow/SharedFlow) → domain (интер
                                                          → data: Room / DataStore / Retrofit / WorkManager
 ```
 Всё связывается через Hilt (`NetworkModule`, `DatabaseModule`, `RepositoryModule`).
+
+## Скриншоты
+
+| Экран | Что показывает |
+|---|---|
+| ![](MainMenu.png) | Главный экран: поиск, фильтры-чипы, время обновления, избранное |
+| ![](Details.png) | Детали человека: статус, заметка, подборки (данные из кэша Room) |
+| ![](History.png) | История: недавние запросы и просмотренные люди (ДЗ 4) |
+| ![](Mine.png) | «Моё»: подборки, заметки и статусы |
+| ![](collection.png) | Экран подборки |
+| ![](OfflineScreen.png) | Без сети: сохранённые данные + плашка «Нет сети» |
+| ![](OfflineSearch.png) | Поиск без сети по сохранённым данным |
+| ![](Settings.png) | Настройки (DataStore): TTL кэша, фоновая синхронизация, сортировка, тема |
+| ![](FavDatabaseInspector.png) | Database Inspector: таблица избранного в Room |
+| ![](CollectionDB.png) | Database Inspector: таблицы подборок |
+| ![](SyncWorker.png) | Background Task Inspector: SyncWorker (WorkManager) |
